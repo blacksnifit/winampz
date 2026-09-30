@@ -52,4 +52,5 @@ jobs:
           **/Release/*.exe
           **/Release/*.dll
           **/Release/*.w5s
+          **/Release/*.w5s
   
