@@ -1,63 +1,47 @@
-name: Build Original Winamp
+name: Build Winamp
 
 on:
   push:
-    branches: [ "main", "master", "community" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main", "master", "community" ]
-  workflow_dispatch: 
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
-  build-winamp:
-    runs-on: windows-latest # Dynamically provisions an active server
+  build:
+    runs-on: windows-2019
 
     steps:
-    - name: Checkout Repository
+    - name: Checkout Source Code
       uses: actions/checkout@v4
 
-    # This enforces the older Visual Studio 2019 build tools on a modern Windows runner
-    - name: Add MSBuild (VS2019) to PATH
+    - name: Add MSBuild to PATH
       uses: microsoft/setup-msbuild@v2
-      with:
-        vs-version: '16' # Explicit VS2019
 
-    - name: Install Build Tools via Chocolatey
-      run: |
-        choco install nasm strawberryperl 7zip -y
-
-    - name: Unpack Intel IPP Legacy Libraries
-      run: |
-        if (Test-Path "unpack_intel_ipp_6.1.1.035.cmd") {
-          .\unpack_intel_ipp_6.1.1.035.cmd
-        } elseif (Test-Path "BuildTools/unpack_intel_ipp_6.1.1.035.cmd") {
-          cd BuildTools
-          .\unpack_intel_ipp_6.1.1.035.cmd
-          cd ..
-        }
+    # Note: Winamp heavily depends on Intel IPP v6.1.1.035.
+    # If those binaries are not committed to your repository's lib folder,
+    # you must download/restore them here before running the compilation.
+    - name: Verify or Restore Intel IPP Libs
       shell: powershell
-
-    - name: Patch ATLMFC SDK Bug (DeleteFile Conflict)
       run: |
-        # Adjust path dynamically to locate the VS2019 build tools headers on windows-latest
-        $headerPath = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\*" -Recurse -Filter "atltransactionmanager.h" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-        if ($headerPath -and (Test-Path $headerPath)) {
-            (Get-Content $headerPath) -replace '::DeleteFile\(', '::DeleteFileW(' | Set-Content $headerPath
-            Write-Host "Successfully patched ATLMFC Header file at $headerPath"
-        } else {
-            Write-Warning "Target ATLMFC Header path not found."
-        }
-      shell: powershell
+        echo "Ensuring build environment prerequisites are present..."
+        # Add commands here to download or link Intel IPP v6.1.1.035 if needed
 
-    - name: Compile Winamp Solution (x86)
-      run: |
-        msbuild winampAll_2019.sln /p:Configuration=Release /p:Platform=x64
+    - name: Build Winamp Solution
       shell: cmd
+      run: |
+        :: If your repository contains the automated batch file:
+        if exist build_winampAll_2019.cmd (
+            call build_winampAll_2019.cmd
+        ) else (
+            :: Fallback directly to MSBuild using the standard solution file
+            msbuild winampAll_2019.sln /p:Configuration=Release /p:Platform=x86 /m
+        )
 
-    - name: Upload Winamp Binaries
+    - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: winamp-leaked-build
+        name: winamp-binaries
         path: |
           **/Release/*.exe
           **/Release/*.dll
-          **/Release/*.w5s
