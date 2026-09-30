@@ -1,0 +1,63 @@
+name: Build Original Winamp
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows you to manually click "Run Workflow" in GitHub
+
+jobs:
+  build-winamp:
+    runs-on: windows-2019 # Required because the original code targets Visual Studio 2019
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Install Build Tools via Chocolatey
+      run: |
+        choco install nasm strawberryperl 7zip -y
+
+    - name: Unpack Intel IPP Legacy Libraries
+      run: |
+        # Most community forks bundle the archived Intel IPP v6 zip or an unpack script
+        if (Test-Path "unpack_intel_ipp_6.1.1.035.cmd") {
+          .\unpack_intel_ipp_6.1.1.035.cmd
+        } elseif (Test-Path "BuildTools/unpack_intel_ipp_6.1.1.035.cmd") {
+          cd BuildTools
+          .\unpack_intel_ipp_6.1.1.035.cmd
+          cd ..
+        }
+      shell: powershell
+
+    - name: Patch ATLMFC SDK Bug (DeleteFile Conflict)
+      run: |
+        # Fixes an exact error on line 427 of MSVC's 'atltransactionmanager.h' 
+        # where Winamp's code conflicts with native Windows SDK namespace definitions.
+        $headerPath = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\MSVC\14.29.30133\atlmfc\include\atltransactionmanager.h"
+        if (Test-Path $headerPath) {
+            (Get-Content $headerPath) -replace '::DeleteFile\(', '::DeleteFileW(' | Set-Content $headerPath
+            Write-Host "Successfully patched ATLMFC Header file."
+        } else {
+            Write-Warning "Target ATLMFC Header path not found; standard MSVC path may differ."
+        }
+      shell: powershell
+
+    - name: Compile Winamp Solution (x86)
+      run: |
+        # Executes the legacy batch wrapper to trigger compilation sequence
+        .\build_winampAll_2019.cmd
+      shell: cmd
+
+    - name: Upload Winamp Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: winamp-leaked-build
+        path: |
+          **/Release/*.exe
+          **/Release/*.dll
+          **/Release/*.w5s
