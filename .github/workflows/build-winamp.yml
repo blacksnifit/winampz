@@ -2,21 +2,24 @@ name: Build Original Winamp
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "community" ]
   pull_request:
-    branches: [ "main", "master" ]
-  workflow_dispatch: # Allows you to manually click "Run Workflow" in GitHub
+    branches: [ "main", "master", "community" ]
+  workflow_dispatch: 
 
 jobs:
   build-winamp:
-    runs-on: windows-2019 # Required because the original code targets Visual Studio 2019
+    runs-on: windows-latest # Dynamically provisions an active server
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Add MSBuild to PATH
+    # This enforces the older Visual Studio 2019 build tools on a modern Windows runner
+    - name: Add MSBuild (VS2019) to PATH
       uses: microsoft/setup-msbuild@v2
+      with:
+        vs-version: '[16.0,17.0)' 
 
     - name: Install Build Tools via Chocolatey
       run: |
@@ -24,7 +27,6 @@ jobs:
 
     - name: Unpack Intel IPP Legacy Libraries
       run: |
-        # Most community forks bundle the archived Intel IPP v6 zip or an unpack script
         if (Test-Path "unpack_intel_ipp_6.1.1.035.cmd") {
           .\unpack_intel_ipp_6.1.1.035.cmd
         } elseif (Test-Path "BuildTools/unpack_intel_ipp_6.1.1.035.cmd") {
@@ -36,20 +38,18 @@ jobs:
 
     - name: Patch ATLMFC SDK Bug (DeleteFile Conflict)
       run: |
-        # Fixes an exact error on line 427 of MSVC's 'atltransactionmanager.h' 
-        # where Winamp's code conflicts with native Windows SDK namespace definitions.
-        $headerPath = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Tools\MSVC\14.29.30133\atlmfc\include\atltransactionmanager.h"
-        if (Test-Path $headerPath) {
+        # Adjust path dynamically to locate the VS2019 build tools headers on windows-latest
+        $headerPath = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\*" -Recurp -Filter "atltransactionmanager.h" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        if ($headerPath -and (Test-Path $headerPath)) {
             (Get-Content $headerPath) -replace '::DeleteFile\(', '::DeleteFileW(' | Set-Content $headerPath
-            Write-Host "Successfully patched ATLMFC Header file."
+            Write-Host "Successfully patched ATLMFC Header file at $headerPath"
         } else {
-            Write-Warning "Target ATLMFC Header path not found; standard MSVC path may differ."
+            Write-Warning "Target ATLMFC Header path not found."
         }
       shell: powershell
 
     - name: Compile Winamp Solution (x86)
       run: |
-        # Executes the legacy batch wrapper to trigger compilation sequence
         .\build_winampAll_2019.cmd
       shell: cmd
 
