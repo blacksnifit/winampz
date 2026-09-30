@@ -19,7 +19,7 @@ jobs:
     - name: Add MSBuild (VS2019) to PATH
       uses: microsoft/setup-msbuild@v2
       with:
-        vs-version: '[16.0,17.0)' 
+        vs-version: '16' # Explicit VS2019
 
     - name: Install Build Tools via Chocolatey
       run: |
