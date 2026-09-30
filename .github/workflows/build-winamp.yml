@@ -50,7 +50,7 @@ jobs:
 
     - name: Compile Winamp Solution (x86)
       run: |
-        msbuild winampAll_2019.sln /m /p:Configuration=Release /p:Platform=x86
+        msbuild winampAll_2019.sln /p:Configuration=Release /p:Platform=x64
       shell: cmd
 
     - name: Upload Winamp Binaries
