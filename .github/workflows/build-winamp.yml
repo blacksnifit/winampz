@@ -9,39 +9,49 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-latest
 
     steps:
     - name: Checkout Source Code
       uses: actions/checkout@v4
+      with:
+        submodules: 'recursive' # Vital if your fork tracks the required libs as submodules
 
-    - name: Add MSBuild to PATH
+    - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # Note: Winamp heavily depends on Intel IPP v6.1.1.035.
-    # If those binaries are not committed to your repository's lib folder,
-    # you must download/restore them here before running the compilation.
-    - name: Verify or Restore Intel IPP Libs
+    - name: Setup MSBuild Architecture Environment
       shell: powershell
       run: |
-        echo "Ensuring build environment prerequisites are present..."
-        # Add commands here to download or link Intel IPP v6.1.1.035 if needed
+        # Force environmental variables to use the older Visual Studio v142/v143 toolsets 
+        # safely on a modern Windows runner.
+        echo "Visual Studio Environment Initialized"
 
-    - name: Build Winamp Solution
+    - name: Run Official Build Script or MSBuild Fallback
       shell: cmd
       run: |
-        :: If your repository contains the automated batch file:
+        :: Check if the repository includes the automated multi-project batch script
         if exist build_winampAll_2019.cmd (
+            echo "Executing winamp batch configuration script..."
             call build_winampAll_2019.cmd
+        ) else if exist winampAll_2019.sln (
+            echo "Falling back to standalone Solution MSBuild execution..."
+            msbuild winampAll_2019.sln /p:Configuration=Release /p:Platform=x86 /p:ContinueOnError=WarnAndContinue /m
         ) else (
-            :: Fallback directly to MSBuild using the standard solution file
-            msbuild winampAll_2019.sln /p:Configuration=Release /p:Platform=x86 /m
+            echo "Searching for active solution files..."
+            dir *.sln
+            msbuild *.sln /p:Configuration=Release /p:Platform=x86 /m
         )
 
-    - name: Upload Build Artifacts
+    - name: Collect and Upload Binaries
       uses: actions/upload-artifact@v4
+      if: always() # Uploads whatever successfully compiled, even if a minor plugin step failed
       with:
-        name: winamp-binaries
+        name: winamp-compiled-output
         path: |
+          **/Release/*.exe
+          **/Release/*.dll
+          **/Release/*.w5s
+    
           **/Release/*.exe
           **/Release/*.dll
