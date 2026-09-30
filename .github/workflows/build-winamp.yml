@@ -39,7 +39,7 @@ jobs:
     - name: Patch ATLMFC SDK Bug (DeleteFile Conflict)
       run: |
         # Adjust path dynamically to locate the VS2019 build tools headers on windows-latest
-        $headerPath = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\*" -Recurp -Filter "atltransactionmanager.h" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+        $headerPath = Get-ChildItem -Path "C:\Program Files\Microsoft Visual Studio\*" -Recurse -Filter "atltransactionmanager.h" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
         if ($headerPath -and (Test-Path $headerPath)) {
             (Get-Content $headerPath) -replace '::DeleteFile\(', '::DeleteFileW(' | Set-Content $headerPath
             Write-Host "Successfully patched ATLMFC Header file at $headerPath"
